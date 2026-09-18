@@ -2,7 +2,6 @@ import streamlit as st
 import mysql.connector
 import pandas as pd
 
-# Database configuration
 DB_CONFIG = {
     "host": "82.180.143.66",
     "user": "u263681140_students",
@@ -12,25 +11,6 @@ DB_CONFIG = {
 
 def get_connection():
     return mysql.connector.connect(**DB_CONFIG)
-
-def init_tables():
-    conn = get_connection()
-    cursor = conn.cursor()
-    # Table for dispensing history linked to rationCardNo
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS RationDispenseHistory (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            rationCardNo VARCHAR(50),
-            collector_name VARCHAR(50),
-            amount_kg FLOAT,
-            dispensed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-init_tables()
 
 # Session State Initialization
 if "authenticated" not in st.session_state:
@@ -90,24 +70,22 @@ else:
 if not st.session_state["authenticated"]:
     st.info("Please log in using the sidebar to proceed.")
 else:
-    # ----------------------------------------------------
     # DISTRIBUTOR DASHBOARD
-    # ----------------------------------------------------
     if st.session_state["user_role"] == "Distributor":
         st.title("Ration Distributor Dashboard")
         
         tab1, tab2, tab3 = st.tabs(["Register Collector", "Dispense History", "Approve & Dispense"])
 
-        # Tab 1: Collector Registration using manual ID
+        # Tab 1: Manual ID registration into RationUsers
         with tab1:
-            st.subheader("Register Ration Collector into RationUsers")
+            st.subheader("Register Ration Collector (RationUsers)")
             with st.form("create_collector_form"):
                 user_id = st.number_input("User ID (id)", min_value=1, step=1)
-                name = st.text_input("Head of Family / User Name (Name)")
-                family_member = st.text_input("Collector / Family Member Name (FamilyMember)")
+                name = st.text_input("Head of Family Name (Name)")
+                family_member = st.text_input("Collector Name (FamilyMember)")
                 mobile = st.text_input("Mobile Number (Mobile)")
                 ration_card_no = st.text_input("Ration Card Number (rationCardNo)")
-                adhar_card = st.text_input("Aadhaar Card Number / Finger ID (AdharCard)")
+                adhar_card = st.text_input("Aadhaar Card / Finger ID (AdharCard)")
                 password = st.text_input("Password (password)", type="password")
                 
                 submit_reg = st.form_submit_button("Register to Database")
@@ -126,27 +104,31 @@ else:
                             conn.commit()
                             cursor.close()
                             conn.close()
-                            st.success(f"Record with ID {user_id} registered successfully for '{family_member}'!")
+                            st.success(f"Collector '{family_member}' registered with ID: {user_id}!")
                         except mysql.connector.IntegrityError:
-                            st.error(f"Error: A record with ID {user_id} already exists.")
+                            st.error(f"Record with ID {user_id} already exists.")
                         except Exception as e:
                             st.error(f"Database error: {e}")
                     else:
                         st.warning("Please fill out all fields.")
 
-        # Tab 2: Dispense History
+        # Tab 2: Dispense History mapped to RationDispenseHistory schema
         with tab2:
-            st.subheader("Ration Distribution Logs")
-            conn = get_connection()
-            df_history = pd.read_sql("SELECT * FROM RationDispenseHistory ORDER BY dispensed_at DESC", conn)
-            conn.close()
+            st.subheader("Ration Distribution History")
+            try:
+                conn = get_connection()
+                query = "SELECT id, rationCardNo, collector_name, weight, dispensed_at FROM RationDispenseHistory ORDER BY dispensed_at DESC"
+                df_history = pd.read_sql(query, conn)
+                conn.close()
 
-            if not df_history.empty:
-                st.dataframe(df_history, use_container_width=True)
-            else:
-                st.info("No distribution records found yet.")
+                if not df_history.empty:
+                    st.dataframe(df_history, use_container_width=True)
+                else:
+                    st.info("No records found in RationDispenseHistory.")
+            except Exception as e:
+                st.error(f"Error fetching history: {e}")
 
-        # Tab 3: Approval & Dispense with Slider
+        # Tab 3: Approval & Dispense with Slider mapped to 'weight' column
         with tab3:
             st.subheader("Dispense Ration Approval")
             search_query = st.text_input("Enter Ration Card No, Aadhaar, or User ID")
@@ -165,49 +147,52 @@ else:
                 if user_match:
                     st.success(f"Record Verified: **{user_match['Name']}**")
                     st.write(f"**ID:** {user_match['id']}")
-                    st.write(f"**Collector Name:** {user_match['FamilyMember']}")
+                    st.write(f"**Collector:** {user_match['FamilyMember']}")
                     st.write(f"**Ration Card No:** {user_match['rationCardNo']}")
                     st.write(f"**Aadhaar:** {user_match['AdharCard']}")
-                    st.write(f"**Mobile:** {user_match['Mobile']}")
 
                     # Quantity Slider
                     ration_qty = st.slider("Select Ration Amount (kg)", min_value=1.0, max_value=50.0, value=5.0, step=0.5)
 
                     if st.button("Approve & Dispense Ration"):
-                        conn = get_connection()
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            "INSERT INTO RationDispenseHistory (rationCardNo, collector_name, amount_kg) VALUES (%s, %s, %s)",
-                            (user_match['rationCardNo'], user_match['FamilyMember'], ration_qty)
-                        )
-                        conn.commit()
-                        cursor.close()
-                        conn.close()
-                        st.balloons()
-                        st.success(f"Successfully dispensed {ration_qty} kg to {user_match['FamilyMember']}!")
+                        try:
+                            conn = get_connection()
+                            cursor = conn.cursor()
+                            cursor.execute(
+                                "INSERT INTO RationDispenseHistory (rationCardNo, collector_name, weight) VALUES (%s, %s, %s)",
+                                (user_match['rationCardNo'], user_match['FamilyMember'], float(ration_qty))
+                            )
+                            conn.commit()
+                            cursor.close()
+                            conn.close()
+                            st.balloons()
+                            st.success(f"Successfully dispensed {ration_qty} kg to {user_match['FamilyMember']}!")
+                        except Exception as e:
+                            st.error(f"Error updating dispense history: {e}")
                 else:
                     st.error("No record found matching the entered criteria.")
 
-    # ----------------------------------------------------
     # CARD HOLDER DASHBOARD
-    # ----------------------------------------------------
     elif st.session_state["user_role"] == "Card Holder":
         user = st.session_state["user_data"]
         st.title(f"Welcome, {user['Name']}")
         
         st.write(f"**User ID:** {user['id']}")
         st.write(f"**Ration Card No:** {user['rationCardNo']}")
-        st.write(f"**Family Member:** {user['FamilyMember']}")
+        st.write(f"**Family Member / Collector:** {user['FamilyMember']}")
         st.write(f"**Mobile:** {user['Mobile']}")
         st.write(f"**Aadhaar Number:** {user['AdharCard']}")
 
         st.subheader("Your Dispensing Records")
-        conn = get_connection()
-        query = "SELECT * FROM RationDispenseHistory WHERE rationCardNo = %s ORDER BY dispensed_at DESC"
-        df_user_history = pd.read_sql(query, conn, params=(user['rationCardNo'],))
-        conn.close()
+        try:
+            conn = get_connection()
+            query = "SELECT id, rationCardNo, collector_name, weight, dispensed_at FROM RationDispenseHistory WHERE rationCardNo = %s ORDER BY dispensed_at DESC"
+            df_user_history = pd.read_sql(query, conn, params=(user['rationCardNo'],))
+            conn.close()
 
-        if not df_user_history.empty:
-            st.dataframe(df_user_history, use_container_width=True)
-        else:
-            st.info("No ration collection records found for your card.")
+            if not df_user_history.empty:
+                st.dataframe(df_user_history, use_container_width=True)
+            else:
+                st.info("No ration collection records found for your card.")
+        except Exception as e:
+            st.error(f"Error fetching user records: {e}")
