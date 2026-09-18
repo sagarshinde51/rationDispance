@@ -85,13 +85,13 @@ else:
         with tab1:
             st.subheader("Register Ration Collector (RationUsers)")
             with st.form("create_collector_form"):
-                user_id = st.number_input("User ID (id)", min_value=1, step=1)[cite: 1]
-                name = st.text_input("Head of Family Name (Name)")[cite: 1]
-                family_member = st.text_input("Collector Name (FamilyMember)")[cite: 1]
-                mobile = st.text_input("Mobile Number (Mobile)")[cite: 1]
-                ration_card_no = st.text_input("Ration Card Number (rationCardNo)")[cite: 1]
-                adhar_card = st.text_input("Aadhaar Card / Finger ID (AdharCard)")[cite: 1]
-                password = st.text_input("Password (password)", type="password")[cite: 1]
+                user_id = st.number_input("User ID (id)", min_value=1, step=1)
+                name = st.text_input("Head of Family Name (Name)")
+                family_member = st.text_input("Collector Name (FamilyMember)")
+                mobile = st.text_input("Mobile Number (Mobile)")
+                ration_card_no = st.text_input("Ration Card Number (rationCardNo)")
+                adhar_card = st.text_input("Aadhaar Card / Finger ID (AdharCard)")
+                password = st.text_input("Password (password)", type="password")
                 
                 submit_reg = st.form_submit_button("Register to Database")
 
@@ -103,8 +103,8 @@ else:
                             cursor.execute(
                                 """INSERT INTO RationUsers 
                                    (id, Name, FamilyMember, Mobile, rationCardNo, AdharCard, password) 
-                                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",[cite: 1]
-                                (int(user_id), name, family_member, mobile, ration_card_no, adhar_card, password)[cite: 1]
+                                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                                (int(user_id), name, family_member, mobile, ration_card_no, adhar_card, password)
                             )
                             conn.commit()
                             cursor.close()
@@ -122,7 +122,7 @@ else:
             st.subheader("All Registered Users (RationUsers)")
             try:
                 conn = get_connection()
-                query_users = "SELECT id, Name, FamilyMember, Mobile, rationCardNo, AdharCard FROM RationUsers ORDER BY id ASC"[cite: 1]
+                query_users = "SELECT id, Name, FamilyMember, Mobile, rationCardNo, AdharCard FROM RationUsers ORDER BY id ASC"
                 df_users = pd.read_sql(query_users, conn)
                 conn.close()
 
@@ -138,7 +138,7 @@ else:
             st.subheader("Ration Distribution History")
             try:
                 conn = get_connection()
-                query_history = "SELECT id, rationCardNo, collector_name, weight, dispensed_at FROM RationDispenseHistory ORDER BY dispensed_at DESC"[cite: 2]
+                query_history = "SELECT id, rationCardNo, collector_name, weight, dispensed_at FROM RationDispenseHistory ORDER BY dispensed_at DESC"
                 df_history = pd.read_sql(query_history, conn)
                 conn.close()
 
@@ -158,7 +158,7 @@ else:
                 conn = get_connection()
                 cursor = conn.cursor(dictionary=True)
                 cursor.execute(
-                    "SELECT * FROM RationUsers WHERE rationCardNo = %s OR AdharCard = %s OR id = %s", [cite: 1]
+                    "SELECT * FROM RationUsers WHERE rationCardNo = %s OR AdharCard = %s OR id = %s",
                     (search_query, search_query, search_query)
                 )
                 user_match = cursor.fetchone()
@@ -166,11 +166,11 @@ else:
                 conn.close()
 
                 if user_match:
-                    st.success(f"Record Verified: **{user_match['Name']}**")[cite: 1]
-                    st.write(f"**ID:** {user_match['id']}")[cite: 1]
-                    st.write(f"**Collector:** {user_match['FamilyMember']}")[cite: 1]
-                    st.write(f"**Ration Card No:** {user_match['rationCardNo']}")[cite: 1]
-                    st.write(f"**Aadhaar:** {user_match['AdharCard']}")[cite: 1]
+                    st.success(f"Record Verified: **{user_match['Name']}**")
+                    st.write(f"**ID:** {user_match['id']}")
+                    st.write(f"**Collector:** {user_match['FamilyMember']}")
+                    st.write(f"**Ration Card No:** {user_match['rationCardNo']}")
+                    st.write(f"**Aadhaar:** {user_match['AdharCard']}")
 
                     # Quantity Slider
                     ration_qty = st.slider("Select Ration Amount (kg)", min_value=1.0, max_value=50.0, value=5.0, step=0.5)
@@ -180,14 +180,14 @@ else:
                             conn = get_connection()
                             cursor = conn.cursor()
                             cursor.execute(
-                                "INSERT INTO RationDispenseHistory (rationCardNo, collector_name, weight) VALUES (%s, %s, %s)",[cite: 2]
-                                (user_match['rationCardNo'], user_match['FamilyMember'], float(ration_qty))[cite: 1, 2]
+                                "INSERT INTO RationDispenseHistory (rationCardNo, collector_name, weight) VALUES (%s, %s, %s)",
+                                (user_match['rationCardNo'], user_match['FamilyMember'], float(ration_qty))
                             )
                             conn.commit()
                             cursor.close()
                             conn.close()
                             st.balloons()
-                            st.success(f"Successfully dispensed {ration_qty} kg to {user_match['FamilyMember']}!")[cite: 1]
+                            st.success(f"Successfully dispensed {ration_qty} kg to {user_match['FamilyMember']}!")
                         except Exception as e:
                             st.error(f"Error updating dispense history: {e}")
                 else:
@@ -196,19 +196,19 @@ else:
     # CARD HOLDER DASHBOARD
     elif st.session_state["user_role"] == "Card Holder":
         user = st.session_state["user_data"]
-        st.title(f"Welcome, {user['Name']}")[cite: 1]
+        st.title(f"Welcome, {user['Name']}")
         
-        st.write(f"**User ID:** {user['id']}")[cite: 1]
-        st.write(f"**Ration Card No:** {user['rationCardNo']}")[cite: 1]
-        st.write(f"**Family Member / Collector:** {user['FamilyMember']}")[cite: 1]
-        st.write(f"**Mobile:** {user['Mobile']}")[cite: 1]
-        st.write(f"**Aadhaar Number:** {user['AdharCard']}")[cite: 1]
+        st.write(f"**User ID:** {user['id']}")
+        st.write(f"**Ration Card No:** {user['rationCardNo']}")
+        st.write(f"**Family Member / Collector:** {user['FamilyMember']}")
+        st.write(f"**Mobile:** {user['Mobile']}")
+        st.write(f"**Aadhaar Number:** {user['AdharCard']}")
 
         st.subheader("Your Dispensing Records")
         try:
             conn = get_connection()
-            query = "SELECT id, rationCardNo, collector_name, weight, dispensed_at FROM RationDispenseHistory WHERE rationCardNo = %s ORDER BY dispensed_at DESC"[cite: 2]
-            df_user_history = pd.read_sql(query, conn, params=(user['rationCardNo'],))[cite: 1]
+            query = "SELECT id, rationCardNo, collector_name, weight, dispensed_at FROM RationDispenseHistory WHERE rationCardNo = %s ORDER BY dispensed_at DESC"
+            df_user_history = pd.read_sql(query, conn, params=(user['rationCardNo'],))
             conn.close()
 
             if not df_user_history.empty:
