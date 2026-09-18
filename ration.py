@@ -16,18 +16,7 @@ def get_connection():
 def init_tables():
     conn = get_connection()
     cursor = conn.cursor()
-    # Table for collectors registered by finger_id
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS RationCollectors (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            finger_id VARCHAR(50) UNIQUE,
-            rationCardNo VARCHAR(50),
-            head_of_family VARCHAR(50),
-            collector_name VARCHAR(50),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    # Table for dispensing history
+    # Table for dispensing history linked to rationCardNo
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS RationDispenseHistory (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -61,7 +50,6 @@ if not st.session_state["authenticated"]:
         dist_user = st.sidebar.text_input("Distributor Username")
         dist_pass = st.sidebar.text_input("Distributor Password", type="password")
         if st.sidebar.button("Login"):
-            # Default distributor credentials
             if dist_user == "admin" and dist_pass == "admin123":
                 st.session_state["authenticated"] = True
                 st.session_state["user_role"] = "Distributor"
@@ -110,33 +98,37 @@ else:
         
         tab1, tab2, tab3 = st.tabs(["Register Collector", "Dispense History", "Approve & Dispense"])
 
-        # Tab 1: Collector Registration
+        # Tab 1: Collector Registration using manual ID
         with tab1:
-            st.subheader("Create Ration Collector Account")
+            st.subheader("Register Ration Collector into RationUsers")
             with st.form("create_collector_form"):
-                finger_id = st.text_input("Fingerprint Scanner ID / Biometric ID")
-                ration_no = st.text_input("Ration Card Number")
-                head_name = st.text_input("Head of Family Name")
-                collector_name = st.text_input("Ration Collector Name")
-                submit_reg = st.form_submit_button("Register Collector")
+                user_id = st.number_input("User ID (id)", min_value=1, step=1)
+                name = st.text_input("Head of Family / User Name (Name)")
+                family_member = st.text_input("Collector / Family Member Name (FamilyMember)")
+                mobile = st.text_input("Mobile Number (Mobile)")
+                ration_card_no = st.text_input("Ration Card Number (rationCardNo)")
+                adhar_card = st.text_input("Aadhaar Card Number / Finger ID (AdharCard)")
+                password = st.text_input("Password (password)", type="password")
+                
+                submit_reg = st.form_submit_button("Register to Database")
 
                 if submit_reg:
-                    if finger_id and ration_no and head_name and collector_name:
+                    if user_id and name and family_member and mobile and ration_card_no and adhar_card and password:
                         try:
                             conn = get_connection()
                             cursor = conn.cursor()
                             cursor.execute(
-                                """INSERT INTO RationCollectors 
-                                   (finger_id, rationCardNo, head_of_family, collector_name) 
-                                   VALUES (%s, %s, %s, %s)""",
-                                (finger_id, ration_no, head_name, collector_name)
+                                """INSERT INTO RationUsers 
+                                   (id, Name, FamilyMember, Mobile, rationCardNo, AdharCard, password) 
+                                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                                (int(user_id), name, family_member, mobile, ration_card_no, adhar_card, password)
                             )
                             conn.commit()
                             cursor.close()
                             conn.close()
-                            st.success(f"Collector {collector_name} registered successfully with Finger ID: {finger_id}!")
+                            st.success(f"Record with ID {user_id} registered successfully for '{family_member}'!")
                         except mysql.connector.IntegrityError:
-                            st.error("This Finger ID is already mapped to an account.")
+                            st.error(f"Error: A record with ID {user_id} already exists.")
                         except Exception as e:
                             st.error(f"Database error: {e}")
                     else:
@@ -156,21 +148,27 @@ else:
 
         # Tab 3: Approval & Dispense with Slider
         with tab3:
-            st.subheader("Dispense Ration via Fingerprint Scan")
-            input_finger_id = st.text_input("Enter/Scan Finger ID for Verification")
+            st.subheader("Dispense Ration Approval")
+            search_query = st.text_input("Enter Ration Card No, Aadhaar, or User ID")
             
-            if input_finger_id:
+            if search_query:
                 conn = get_connection()
                 cursor = conn.cursor(dictionary=True)
-                cursor.execute("SELECT * FROM RationCollectors WHERE finger_id = %s", (input_finger_id,))
-                collector = cursor.fetchone()
+                cursor.execute(
+                    "SELECT * FROM RationUsers WHERE rationCardNo = %s OR AdharCard = %s OR id = %s", 
+                    (search_query, search_query, search_query)
+                )
+                user_match = cursor.fetchone()
                 cursor.close()
                 conn.close()
 
-                if collector:
-                    st.success(f"Collector Verified: **{collector['collector_name']}**")
-                    st.write(f"**Ration Card No:** {collector['rationCardNo']}")
-                    st.write(f"**Head of Family:** {collector['head_of_family']}")
+                if user_match:
+                    st.success(f"Record Verified: **{user_match['Name']}**")
+                    st.write(f"**ID:** {user_match['id']}")
+                    st.write(f"**Collector Name:** {user_match['FamilyMember']}")
+                    st.write(f"**Ration Card No:** {user_match['rationCardNo']}")
+                    st.write(f"**Aadhaar:** {user_match['AdharCard']}")
+                    st.write(f"**Mobile:** {user_match['Mobile']}")
 
                     # Quantity Slider
                     ration_qty = st.slider("Select Ration Amount (kg)", min_value=1.0, max_value=50.0, value=5.0, step=0.5)
@@ -180,15 +178,15 @@ else:
                         cursor = conn.cursor()
                         cursor.execute(
                             "INSERT INTO RationDispenseHistory (rationCardNo, collector_name, amount_kg) VALUES (%s, %s, %s)",
-                            (collector['rationCardNo'], collector['collector_name'], ration_qty)
+                            (user_match['rationCardNo'], user_match['FamilyMember'], ration_qty)
                         )
                         conn.commit()
                         cursor.close()
                         conn.close()
                         st.balloons()
-                        st.success(f"Successfully dispensed {ration_qty} kg to {collector['collector_name']}!")
+                        st.success(f"Successfully dispensed {ration_qty} kg to {user_match['FamilyMember']}!")
                 else:
-                    st.error("No registered collector found for this Finger ID.")
+                    st.error("No record found matching the entered criteria.")
 
     # ----------------------------------------------------
     # CARD HOLDER DASHBOARD
@@ -197,6 +195,7 @@ else:
         user = st.session_state["user_data"]
         st.title(f"Welcome, {user['Name']}")
         
+        st.write(f"**User ID:** {user['id']}")
         st.write(f"**Ration Card No:** {user['rationCardNo']}")
         st.write(f"**Family Member:** {user['FamilyMember']}")
         st.write(f"**Mobile:** {user['Mobile']}")
